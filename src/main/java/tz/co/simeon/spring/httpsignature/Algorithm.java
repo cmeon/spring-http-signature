@@ -3,11 +3,7 @@ package tz.co.simeon.spring.httpsignature;
 import java.security.Signature;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
-@Getter
-@RequiredArgsConstructor
 public enum Algorithm {
 
   // rsa
@@ -53,5 +49,27 @@ public enum Algorithm {
   @Override
   public String toString() {
     return getJmvName();
+  }
+
+  private Algorithm(String portableName, String jmvName, Class<Signature> type) {
+    this.portableName = portableName;
+    this.jmvName = jmvName;
+    this.type = type;
+  }
+
+  public static Map<String, Algorithm> getAliases() {
+    return aliases;
+  }
+
+  public String getPortableName() {
+    return portableName;
+  }
+
+  public String getJmvName() {
+    return jmvName;
+  }
+
+  public Class<Signature> getType() {
+    return type;
   }
 }

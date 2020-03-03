@@ -10,9 +10,6 @@ plugins {
     id 'java-library'
 }
 
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
-
 group = GROUP
 version = VERSION_NAME
 
@@ -21,9 +18,6 @@ repositories {
 }
 
 dependencies {
-	compileOnly 'org.projectlombok:lombok:1.18.10'
-	annotationProcessor 'org.projectlombok:lombok:1.18.10'
-
     compileOnly 'javax.servlet:javax.servlet-api:4.0.1'
 
     implementation 'org.springframework.security:spring-security-core:5.2.1.RELEASE'
@@ -35,4 +29,5 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.5.2'
 }
 
+apply from: 'gradle/jvm.gradle'
 apply from: rootProject.file('gradle/gradle-mvn-push.gradle')

@@ -6,11 +6,11 @@ package tz.co.simeon.spring.httpsignature;
 public class HttpSignatureException extends SecurityException {
   private static final long serialVersionUID = 1L;
 
-  HttpSignatureException(String message) {
+  public HttpSignatureException(String message) {
     super(message);
   }
 
-  HttpSignatureException(Exception e) {
+  public HttpSignatureException(Exception e) {
     super(e);
   }
 }

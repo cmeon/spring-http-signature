@@ -3,14 +3,8 @@ package tz.co.simeon.spring.httpsignature;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.Signature;
 import java.security.SignatureException;
-import java.security.spec.MGF1ParameterSpec;
-import java.security.spec.PSSParameterSpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -23,42 +17,55 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import tz.co.simeon.spring.httpsignature.signer.Signer;
+import tz.co.simeon.spring.httpsignature.verifier.Verifier;
 
 /**
  * Class wrapping signature and fields needed to build and validate it.
  */
-@RequiredArgsConstructor
 class HttpSignature {
   private static final String HEADER_SEPARATOR = ": ";
   private static final Logger LOGGER = Logger.getLogger(HttpSignature.class.getName());
   private static final List<String> DEFAULT_HEADERS = CollectionsHelper
       .listOf(SignedHeadersConfig.REQUEST_TARGET, "host", "date", "digest", "content-type");
 
-  @Getter
   private final String keyId;
-
-  @Getter
   private final Algorithm algorithm;
-
   private final List<String> headers;
 
-  @Getter
   private String base64Signature;
-
-  @Getter
   private byte[] signatureBytes;
+
+  public HttpSignature(String keyId, Algorithm algorithm, List<String> headers) {
+    this.keyId = keyId;
+    this.algorithm = algorithm;
+    this.headers = headers;
+  }
 
   HttpSignature(String keyId, Algorithm algorithm, List<String> headers, String base64Signature) {
     this(keyId, algorithm, headers);
     this.base64Signature = base64Signature;
   }
 
+  public String getKeyId() {
+    return keyId;
+  }
+
+  public Algorithm getAlgorithm() {
+    return algorithm;
+  }
+
+  public String getBase64Signature() {
+    return base64Signature;
+  }
+
+  public byte[] getSignatureBytes() {
+    return signatureBytes;
+  }
+
   static HttpSignature fromHeader(String header) {
     /*
-     * keyId="key-master-01",algorithm="rsa-sha256",
-     * signature="Base64(RSA-SHA256(signing string))"
+     * keyId="key-master-01",algorithm="rsa-sha256", signature="Base64(RSA-SHA256(signing string))"
      */
     // required
     String keyId = null;
@@ -123,8 +130,7 @@ class HttpSignature {
     // let's try to validate the signature
     byte[] toBeSigned = getHeaderBytesToSign(request, newHeaders);
 
-    signature.signatureBytes =
-        signRsaSha256(toBeSigned, outboundDefinition, defaultSigningAlgorithm);
+    signature.signatureBytes = signer.sign(toBeSigned);
 
     signature.base64Signature = Base64.getEncoder().encodeToString(signature.signatureBytes);
     return signature;
@@ -183,65 +189,7 @@ class HttpSignature {
       }
     }
 
-    return verifyRsaSha256(signedBytes, clientDefinition, algorithm);
-  }
-
-  private static final Algorithm defaultSigningAlgorithm = Algorithm.RSA_SHA256_PSS;
-
-  public static byte[] signRsaSha256(byte[] bytesToSign, OutboundTargetDefinition targetDefinition,
-      Algorithm algorithm) {
-    try {
-      Signature signature = Signature.getInstance(algorithm.getPortableName(), "BC");
-      signature
-          .setParameter(new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1));
-      signature.initSign(targetDefinition.keyConfig()
-          .orElseThrow(() -> new HttpSignatureException("Key config not found!")).privateKey()
-          .orElseThrow(() -> new HttpSignatureException(
-              "Private key is required, yet not " + "configured")));
-
-      signature.update(bytesToSign);
-      return signature.sign();
-    } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException
-        | NoSuchProviderException | InvalidAlgorithmParameterException e) {
-      throw new HttpSignatureException(e);
-    }
-  }
-
-  public Optional<String> verifyRsaSha256(byte[] signedBytes, InboundClientConfig clientDefinition,
-      Algorithm algorithm) {
-    try {
-      Signature signature = Signature.getInstance(algorithm.getPortableName(), "BC");
-      signature
-          .setParameter(new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1));
-      signature.initVerify(clientDefinition.keyConfig()
-          .orElseThrow(() -> new HttpSignatureException("Key config not found!")).publicKey()
-          .orElseThrow(() -> new HttpSignatureException("Public key is required but not found!")));
-      signature.update(signedBytes);
-
-      boolean verified = signature.verify(this.signatureBytes);
-      if (!verified) {
-        return Optional.of("Signature is not valid");
-      }
-
-      return Optional.empty();
-    } catch (NoSuchAlgorithmException e) {
-      LOGGER.log(Level.FINEST, "SHA256withRSA algorithm not found", e);
-      return Optional.of("SHA256withRSA algorithm not found: " + e.getMessage());
-    } catch (InvalidKeyException e) {
-      LOGGER.log(Level.FINEST, "Invalid RSA key", e);
-      return Optional.of("Invalid RSA key: " + e.getMessage());
-    } catch (SignatureException e) {
-      LOGGER.log(Level.FINEST, "Signature exception", e);
-      return Optional.of("SignatureException: " + e.getMessage());
-    } catch (InvalidAlgorithmParameterException e) {
-      LOGGER.log(Level.FINEST, "Signature exception", e);
-      return Optional.of("Invalid algoritm: " + e.getMessage());
-    } catch (NoSuchProviderException e) {
-      LOGGER.log(Level.FINEST,
-          "Bouncy Castle provider not found: (http://www.bouncycastle.org/wiki/display/JA1/Provider+Installation)",
-          e);
-      return Optional.of("Provider not found:" + e.getMessage());
-    }
+    return verifier.verify(signedBytes);
   }
 
   public byte[] getHeaderBytesToSign(ResettableStreamHttpServletRequest request,
